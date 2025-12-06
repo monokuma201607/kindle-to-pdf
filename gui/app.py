@@ -29,7 +29,7 @@ class KindleCaptureApp(ctk.CTk):
     
     # ウィンドウ設定
     WINDOW_WIDTH = 520
-    WINDOW_HEIGHT = 800
+    WINDOW_HEIGHT = 850
     
     def __init__(self):
         super().__init__()
@@ -88,8 +88,8 @@ class KindleCaptureApp(ctk.CTk):
         # 進捗表示
         self._create_progress_section()
         
-        # 設定ボタン
-        self._create_settings_button()
+        # 設定ボタンはヘッダーに移動
+        # self._create_settings_button()
     
     def _create_header(self):
         """ヘッダーを作成"""
@@ -110,6 +110,18 @@ class KindleCaptureApp(ctk.CTk):
             text_color="gray"
         )
         version_label.pack(side="left", padx=10)
+        
+        # 設定ボタンをヘッダー右側に移動
+        settings_btn = ctk.CTkButton(
+            header_frame,
+            text="⚙️",
+            width=40,
+            height=30,
+            fg_color="transparent",
+            border_width=1,
+            command=self._open_settings
+        )
+        settings_btn.pack(side="right", padx=10)
     
     def _create_status_section(self):
         """ステータスセクションを作成"""
@@ -505,7 +517,7 @@ class SettingsDialog(ctk.CTkToplevel):
         self.parent = parent
         
         self.title("⚙️ 設定")
-        self.geometry("400x400")
+        self.geometry("400x520")
         self.resizable(False, False)
         
         # モーダル化
@@ -542,6 +554,18 @@ class SettingsDialog(ctk.CTkToplevel):
         self.max_pages_entry = ctk.CTkEntry(main_frame, width=100)
         self.max_pages_entry.pack(anchor="w")
         self.max_pages_entry.insert(0, str(self.config.max_pages))
+        
+        # PDF読み方向
+        direction_label = ctk.CTkLabel(main_frame, text="PDFの読み方向")
+        direction_label.pack(anchor="w", pady=(15, 5))
+        
+        self.direction_var = ctk.StringVar(value="左から右" if self.config.pdf_direction == "L2R" else "右から左")
+        self.direction_menu = ctk.CTkOptionMenu(
+            main_frame,
+            values=["左から右 (L2R)", "右から左 (R2L)"],
+            variable=self.direction_var
+        )
+        self.direction_menu.pack(anchor="w")
         
         # クロップ調整ボタン
         crop_btn = ctk.CTkButton(
@@ -581,6 +605,11 @@ class SettingsDialog(ctk.CTkToplevel):
             self.config.delay = float(self.delay_entry.get())
             self.config.similarity_threshold = float(self.threshold_entry.get())
             self.config.max_pages = int(self.max_pages_entry.get())
+            
+            # 方向設定を保存
+            selected = self.direction_var.get()
+            self.config.pdf_direction = "R2L" if "右から左" in selected else "L2R"
+            
             self.destroy()
         except ValueError as e:
             logger.error(f"設定値が無効です: {e}")

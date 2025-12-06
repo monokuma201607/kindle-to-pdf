@@ -320,7 +320,11 @@ class KindleCaptureService:
                 return None
             
             with self._perf.measure("PDF生成"):
-                pdf_path = self._pdf.generate(captured, filename)
+                pdf_path = self._pdf.generate(
+                    captured, 
+                    filename, 
+                    direction=self._config.pdf_direction
+                )
             
             if measure_performance:
                 self._perf.end_session(page_count=len(captured))

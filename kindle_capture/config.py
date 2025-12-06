@@ -60,6 +60,9 @@ class CaptureConfig:
     
     keep_temp_files: bool = False
     """一時ファイルを保持するかどうか"""
+    
+    pdf_direction: str = "L2R"
+    """PDFの読み方向 (L2R: 左から右, R2L: 右から左)"""
 
     
     def __post_init__(self):
@@ -128,6 +131,7 @@ class CaptureConfig:
             default_filename=output.get("default_filename", "output.pdf"),
             start_delay=capture.get("start_delay", 3),
             keep_temp_files=capture.get("keep_temp_files", False),
+            pdf_direction=output.get("pdf_direction", "L2R"),
         )
     
     def to_dict(self) -> dict:
@@ -143,6 +147,7 @@ class CaptureConfig:
             "output": {
                 "output_dir": self.output_dir,
                 "default_filename": self.default_filename,
+                "pdf_direction": self.pdf_direction,
             },
             "window": {
                 "keywords": self.window_keywords,
