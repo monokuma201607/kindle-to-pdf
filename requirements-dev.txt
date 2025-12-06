@@ -1,0 +1,5 @@
+# 開発用依存パッケージ
+-r requirements.txt
+pytest>=7.0.0
+pytest-bdd>=7.0.0
+pytest-mock>=3.0.0

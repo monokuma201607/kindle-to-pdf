@@ -1,0 +1,36 @@
+# Kindle Capture 設定ファイル
+
+capture:
+  # キャプチャ間の待機時間（秒）
+  # 高速モード: 0.3, 安定モード: 1.0
+  delay: 0.5
+  
+  # 画像比較の類似度閾値（0.0-1.0）
+  similarity_threshold: 0.99
+  
+  # 開始前の待機時間（秒）
+  start_delay: 3
+  
+  # 一時ファイルを保持するか
+  keep_temp_files: false
+  
+  # クロップ設定（Kindle UIを除外するマージン）
+  margin_top: 75       # 上部メニューバー除外
+  margin_bottom: 30    # 下部ページ番号除外
+  margin_left: 150     # 左黒帯除外
+  margin_right: 150    # 右黒帯除外
+
+output:
+  # 出力ディレクトリ（空の場合はカレントディレクトリ）
+  output_dir: ""
+  
+  # デフォルトの出力ファイル名
+  default_filename: "output.pdf"
+
+window:
+  # ウィンドウ検索キーワード（より正確なものを使用）
+  keywords:
+    - "Kindle for PC"
+  
+  # ウィンドウアクティブ化後の待機時間（秒）
+  activation_delay: 0.3
