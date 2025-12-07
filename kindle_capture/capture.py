@@ -111,17 +111,25 @@ class ScreenCapture:
             logger.error(f"画像比較エラー: {e}")
             return 0.0
     
-    @staticmethod
-    def next_page() -> None:
+    def next_page(self) -> None:
         """次のページへ遷移"""
-        pyautogui.press('right')
-        logger.debug("次ページへ遷移")
+        if self._config.pdf_direction == "R2L":
+            # 右開き（和書）は左キーで次へ
+            pyautogui.press('left')
+        else:
+            # 左開き（洋書）は右キーで次へ
+            pyautogui.press('right')
+        logger.debug(f"次ページへ遷移 (方向: {self._config.pdf_direction})")
     
-    @staticmethod
-    def previous_page() -> None:
+    def previous_page(self) -> None:
         """前のページへ遷移"""
-        pyautogui.press('left')
-        logger.debug("前ページへ遷移")
+        if self._config.pdf_direction == "R2L":
+            # 右開き（和書）は右キーで前へ
+            pyautogui.press('right')
+        else:
+            # 左開き（洋書）は左キーで前へ
+            pyautogui.press('left')
+        logger.debug(f"前ページへ遷移 (方向: {self._config.pdf_direction})")
     
     def _create_temp_dir(self) -> str:
         """一時ディレクトリを作成"""

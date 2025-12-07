@@ -16,7 +16,7 @@ class SettingsDialog(ctk.CTkToplevel):
         self.parent = parent
         
         self.title("⚙️ 設定")
-        self.geometry("400x400")
+        self.geometry("400x500")
         self.resizable(False, False)
         
         # モーダル化
@@ -53,6 +53,19 @@ class SettingsDialog(ctk.CTkToplevel):
         self.max_pages_entry = ctk.CTkEntry(main_frame, width=100)
         self.max_pages_entry.pack(anchor="w")
         self.max_pages_entry.insert(0, str(self.config.max_pages))
+        
+        # ページめくり方向
+        direction_label = ctk.CTkLabel(main_frame, text="ページめくり方向")
+        direction_label.pack(anchor="w", pady=(15, 5))
+        
+        current_direction = "左から右 (L2R/洋書)" if self.config.pdf_direction == "L2R" else "右から左 (R2L/和書)"
+        self.direction_menu = ctk.CTkOptionMenu(
+            main_frame,
+            values=["左から右 (L2R/洋書)", "右から左 (R2L/和書)"],
+            width=200
+        )
+        self.direction_menu.set(current_direction)
+        self.direction_menu.pack(anchor="w")
         
         # クロップ調整ボタン
         crop_btn = ctk.CTkButton(
@@ -92,6 +105,10 @@ class SettingsDialog(ctk.CTkToplevel):
             self.config.delay = float(self.delay_entry.get())
             self.config.similarity_threshold = float(self.threshold_entry.get())
             self.config.max_pages = int(self.max_pages_entry.get())
+            
+            direction_val = self.direction_menu.get()
+            self.config.pdf_direction = "L2R" if "左から右" in direction_val else "R2L"
+            
             self.destroy()
         except ValueError as e:
             logger.error(f"設定値が無効です: {e}")
