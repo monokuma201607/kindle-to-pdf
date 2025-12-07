@@ -13,27 +13,26 @@
 
 ```
 kindle/
-├── kindle_capture/          # コアパッケージ（既存）
+├── kindle_capture/          # コアロジック
 │   ├── __init__.py
-│   ├── config.py
-│   ├── window.py
-│   ├── capture.py
-│   ├── pdf_generator.py
+│   ├── config.py            # CaptureConfig
+│   ├── window.py            # win32guiラッパー
+│   ├── capture.py           # キャプチャ/画像処理
+│   ├── pdf_generator.py     # PDF結合
+│   ├── toc_parser.py        # 目次OCR解析
 │   └── exceptions.py
-├── gui/                     # デスクトップUI
+├── gui/                     # UI層 (CustomTkinter)
 │   ├── __init__.py
-│   └── app.py               # CustomTkinterアプリ
-├── tests/
-│   ├── features/
-│   │   ├── capture.feature
-│   │   └── ui.feature
-│   ├── step_defs/
-│   ├── test_unit.py
-│   └── test_gui.py
+│   ├── app.py               # メインアプリ(KindleCaptureApp)
+│   ├── toc_dialog.py        # 目次確認ダイアログ
+│   └── components/
+│       ├── __init__.py
+│       ├── settings_dialog.py   # 設定ダイアログ
+│       └── crop_dialog.py       # クロップ調整ダイアログ
+├── tests/                   # テスト
 ├── docs/                    # ドキュメント
-├── run_gui.py               # GUI起動スクリプト
-├── main.py                  # CLI
-└── config.yaml
+├── run_gui.py               # 起動スクリプト
+└── requirements.txt
 ```
 
 ---
@@ -44,184 +43,117 @@ kindle/
 
 ```mermaid
 classDiagram
-    class FlaskApp {
-        +create_app() Flask
-    }
-    class CaptureSession {
-        -session_id: str
-        -status: SessionStatus
-        -captured_count: int
+    class KindleCaptureApp {
+        -service: KindleCaptureService
         -config: CaptureConfig
-        +start()
-        +stop()
-        +get_progress() dict
-    }
-    class SessionManager {
-        -sessions: dict
-        +create_session() CaptureSession
-        +get_session(id) CaptureSession
-        +end_session(id)
-    }
-    class SocketHandler {
-        +on_connect()
-        +emit_progress(data)
-        +emit_preview(image_data)
+        +main_frame: CTkFrame
+        -_start_capture()
+        -_open_crop_dialog()
+        -_open_settings()
     }
     
-    FlaskApp --> SessionManager
-    SessionManager --> CaptureSession
-    CaptureSession --> KindleCaptureService
-    FlaskApp --> SocketHandler
-```
+    class KindleCaptureService {
+        -window: KindleWindow
+        -config: CaptureConfig
+        +find_window() bool
+        +detect_toc_page() List[Chapter]
+        +run(num_pages, callback)
+    }
+    
+    class SettingsDialog {
+        -config: CaptureConfig
+        +_save()
+    }
+    
+    class CropAdjustDialog {
+        -config: CaptureConfig
+        -service: Service
+        +_update_preview()
+        +_apply()
+    }
+    
+    class TOCConfirmationDialog {
+        -chapters: List[Chapter]
+        +_confirm()
+    }
 
-### 2.2 CaptureSession クラス
-
-```python
-class CaptureSession:
-    """キャプチャセッションを管理"""
-    
-    class Status(Enum):
-        IDLE = "idle"
-        RUNNING = "running"
-        PAUSED = "paused"
-        COMPLETED = "completed"
-        ERROR = "error"
-    
-    def __init__(self, config: CaptureConfig):
-        self.session_id = str(uuid.uuid4())
-        self.status = self.Status.IDLE
-        self.captured_count = 0
-        self.total_pages = None
-        self._service = KindleCaptureService(config)
-        self._thread = None
-    
-    def start(self, mode: str, pages: int = None) -> None:
-        """キャプチャを開始"""
-        pass
-    
-    def stop(self) -> None:
-        """キャプチャを停止"""
-        pass
-    
-    def get_progress(self) -> dict:
-        """進捗情報を取得"""
-        pass
+    KindleCaptureApp --> KindleCaptureService
+    KindleCaptureApp ..> SettingsDialog : creates
+    KindleCaptureApp ..> CropAdjustDialog : creates
+    KindleCaptureApp ..> TOCConfirmationDialog : creates
+    KindleCaptureService --> CaptureConfig
 ```
 
 ---
 
 ## 3. シーケンス図
 
-### 3.1 キャプチャ開始フロー
+### 3.1 キャプチャ実行フロー
 
 ```mermaid
 sequenceDiagram
     actor User
-    participant UI as Web UI
-    participant API as Flask API
-    participant Session as CaptureSession
+    participant App as KindleCaptureApp (UI Thread)
+    participant Thread as CaptureWorker (Thread)
     participant Service as KindleCaptureService
-    participant Kindle as Kindle for PC
+    participant Win as KindleWindow
     
-    User->>UI: 開始ボタンクリック
-    UI->>API: POST /api/capture/start
-    API->>Session: create_session()
-    Session->>Service: find_window()
-    Service->>Kindle: win32gui
-    Kindle-->>Service: window handle
-    Service-->>Session: found
-    Session->>Session: start_thread()
-    API-->>UI: {status: "started"}
+    User->>App: 「開始」ボタン押下
+    App->>App: _countdown(3)
+    App->>Thread: start()
+    activate Thread
+    Thread->>Service: run()
     
-    loop キャプチャループ
-        Session->>Service: capture_window()
-        Service->>Kindle: screenshot
-        Kindle-->>Service: image
-        Session->>UI: WebSocket: progress
-        Session->>UI: WebSocket: preview
-        Session->>Service: next_page()
+    loop 指定回数 / 最後まで
+        Service->>Win: capture()
+        Win-->>Service: Image
+        Service->>Service: save_image()
+        Service->>Thread: callback(progress)
+        Thread->>App: _update_progress()
+        Service->>Win: page_down()
     end
     
-    Session->>Service: generate_pdf()
-    Session->>UI: WebSocket: complete
+    Service->>Service: generate_pdf()
+    Service-->>Thread: output_path
+    
+    Thread->>App: _capture_complete()
+    deactivate Thread
+    App->>User: 完了通知/メッセージ表示
 ```
 
 ---
 
-## 4. 画面コンポーネント設計
+## 4. コンポーネント詳細
 
-### 4.1 CSSカスタムプロパティ（デザイントークン）
+### 4.1 KindleCaptureApp (gui/app.py)
 
-```css
-:root {
-    /* カラーパレット */
-    --color-primary: #6366f1;      /* インディゴ */
-    --color-primary-dark: #4f46e5;
-    --color-success: #22c55e;
-    --color-error: #ef4444;
-    --color-warning: #f59e0b;
-    
-    /* 背景 */
-    --bg-primary: #0f172a;         /* ダークブルー */
-    --bg-secondary: #1e293b;
-    --bg-card: #334155;
-    
-    /* テキスト */
-    --text-primary: #f8fafc;
-    --text-secondary: #94a3b8;
-    
-    /* 効果 */
-    --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.3);
-    --border-radius: 12px;
-}
-```
+アプリケーションのメインエントリーポイント。`ctk.CTk` を継承します。
 
-### 4.2 コンポーネント構成
+- **責任**: メインウィンドウの描画、イベントハンドリング、オーケストレーション
+- **主要属性**:
+    - `_config`: アプリケーション設定
+    - `_service`: キャプチャロジックへのインターフェース
+    - `_capture_thread`: キャプチャ処理用スレッド
 
-| コンポーネント | 責務 |
-|---------------|------|
-| Header | タイトル、設定ボタン |
-| StatusIndicator | Kindle検出状態表示 |
-| PreviewArea | キャプチャ画像プレビュー |
-| ModeSelector | 自動/ページ数指定切替 |
-| FileSelector | 出力ファイル設定 |
-| ProgressBar | 進捗表示 |
-| ControlButtons | 開始/停止ボタン |
-| SettingsModal | 設定モーダル |
+### 4.2 設定・調整ダイアログ
+
+- `SettingsDialog`: `ctk.CTkToplevel`継承。キャプチャ間隔やPDF方向、クロップ設定への導線を提供。
+- `CropAdjustDialog`: プレビューを見ながら上下左右のマージン（クロップ量）を調整可能。変更は一時的に適用され、キャンセル時は元に戻る。
+
+### 4.3 目次解析機能 (TOC)
+
+Tesseract OCRを使用して目次ページを解析します。
+
+1. `KindleCaptureService.detect_toc_page()` が現在の画面をOCR。
+2. 正規表現で「第N章...123」のようなパターンを抽出。
+3. `TOCConfirmationDialog` でユーザーが修正。
+4. 修正された `List[Chapter]` を `run()` に渡し、PDF生成時にしおりとして埋め込む。
 
 ---
 
-## 5. 非同期処理設計
+## 5. エラーハンドリング構想
 
-### 5.1 スレッド構成
+GUIアプリケーションとして、ユーザーに分かりやすいエラー表示を行います。
 
-| スレッド | 役割 |
-|---------|------|
-| Main Thread | Flask/SocketIO サーバー |
-| Capture Thread | キャプチャ処理（セッションごと） |
-
-### 5.2 スレッド間通信
-
-```python
-# イベントベースの通信
-class CaptureSession:
-    def __init__(self):
-        self._stop_event = threading.Event()
-        self._progress_callback = None
-    
-    def _capture_loop(self):
-        while not self._stop_event.is_set():
-            # キャプチャ処理
-            if self._progress_callback:
-                socketio.emit('progress', self.get_progress())
-```
-
----
-
-## 6. セキュリティ考慮
-
-| 項目 | 対策 |
-|------|------|
-| ローカル専用 | localhost のみでリッスン |
-| CSRF | 同一オリジンのみ許可 |
-| ファイルパス | パストラバーサル防止 |
+- **検知不能**: ステータスバーに赤字で通知。「再検出」を促す。
+- **実行時エラー**: キャプチャスレッド内の例外をキャッチし、メインスレッドのコールバック経由で `ctk.CTkInputDialog` (またはメッセージボックス) を表示して通知。

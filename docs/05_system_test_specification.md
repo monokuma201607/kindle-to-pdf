@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |------|------|
 | 文書番号 | TS-SYS-001 |
-| バージョン | 1.0 |
+| バージョン | 1.1 |
 | 作成日 | 2024-12-06 |
 | 関連文書 | FS-KINDLE-001, TS-BDD-001 |
 
@@ -20,8 +20,7 @@
 |------|------|
 | OS | Windows 10/11 |
 | Python | 3.8+ |
-| ブラウザ | Chrome (最新版) |
-| テストツール | pytest, Selenium (E2E) |
+| テストツール | pytest, pytest-qt (GUIテスト用) |
 
 ---
 
@@ -31,29 +30,28 @@
 
 | TC-ID | テスト名 | 前提条件 | 手順 | 期待結果 |
 |-------|---------|---------|------|---------|
-| TC-001 | UI起動確認 | サーバー起動 | http://localhost:5000 アクセス | メイン画面表示 |
-| TC-002 | ウィンドウ検出 | Kindle起動 | API GET /api/status | found: true |
-| TC-003 | キャプチャ開始 | ウィンドウ検出済 | POST /api/capture/start | status: started |
-| TC-004 | 進捗更新 | キャプチャ中 | WebSocket接続 | progressイベント受信 |
-| TC-005 | キャプチャ停止 | キャプチャ中 | POST /api/capture/stop | status: stopped |
-| TC-006 | PDF生成確認 | キャプチャ完了 | ファイル確認 | PDFファイル存在 |
-| TC-007 | 設定変更 | 設定画面表示 | PUT /api/config | 設定反映 |
+| TC-001 | アプリ起動確認 | - | `run_gui.py` 実行 | メイン画面が表示される |
+| TC-002 | ウィンドウ検出 | Kindle起動 | アプリ起動 or 「再検出」押下 | 「検出済み」と表示される |
+| TC-003 | キャプチャ開始 | ウィンドウ検出済 | 「開始」ボタン押下 | カウントダウン後、キャプチャ開始 |
+| TC-004 | 進捗表示更新 | キャプチャ中 | 3ページ処理完了 | 進捗バーとラベルが更新される |
+| TC-005 | キャプチャ停止 | キャプチャ中 | 「停止」ボタン押下 | 数秒以内に停止し、PDFが生成される |
+| TC-006 | PDF生成確認 | キャプチャ完了 | 出力フォルダ確認 | PDFファイルが存在し、開けること |
+| TC-007 | 設定変更 | 設定画面表示 | 設定を変更して「保存」 | 設定値が次回実行時に反映される |
 
 ### 2.2 異常系テスト
 
 | TC-ID | テスト名 | 前提条件 | 手順 | 期待結果 |
 |-------|---------|---------|------|---------|
-| TC-101 | ウィンドウ未検出 | Kindle未起動 | キャプチャ開始 | E001エラー |
-| TC-102 | 不正ページ数 | - | pages = -1 で開始 | バリデーションエラー |
-| TC-103 | 二重開始防止 | キャプチャ中 | 再度開始 | 拒否レスポンス |
+| TC-101 | ウィンドウ未検出 | Kindle未起動 | 「再検出」押下 | 「未検出」と表示、開始ボタン無効 |
+| TC-102 | 不正ページ数 | ページ数指定 | "abc" や "-1" を入力 | 入力不可 または エラーダイアログ |
+| TC-103 | Tesseract未導入 | 目次開始 | OCR実行 | エラーダイアログでURL案内 |
 
 ### 2.3 性能テスト
 
 | TC-ID | テスト名 | 条件 | 期待結果 |
 |-------|---------|------|---------|
 | TC-201 | 起動時間 | コールドスタート | 3秒以内 |
-| TC-202 | メモリ使用量 | 100ページキャプチャ | 500MB以下 |
-| TC-203 | レスポンス時間 | API呼び出し | 200ms以内 |
+| TC-202 | メモリ使用量 | 100ページキャプチャ | リークなし (一定範囲内で推移) |
 
 ---
 
@@ -64,41 +62,34 @@
 ```
 1. アプリケーション起動
 2. Kindle for PC起動・書籍表示
-3. ブラウザで http://localhost:5000 アクセス
-4. Kindle検出確認
-5. 自動モード選択
-6. 開始ボタンクリック
-7. 進捗確認（プログレスバー更新）
-8. 完了まで待機
-9. PDF生成確認
-10. PDFファイルを開いて内容確認
+3. アプリ上の「再検出」ボタンをクリック
+4. ステータスが「検出済み」になることを確認
+5. 「自動モード」を選択
+6. 「開始」ボタンをクリック
+7. カウントダウン(3秒)終了を待つ
+8. 自動ページめくりとキャプチャが開始されるのを目視確認
+9. 数ページ後に「停止」ボタンをクリック
+10. "完了" メッセージが表示されることを確認
+11. 出力されたPDFファイルを開き、ページが正しく結合されているか確認
 ```
 
-### 3.2 テストコード概要
+### 3.2 テスト自動化方針
+
+`pytest-qt` を使用してGUIイベントをシミュレートする。
 
 ```python
-# tests/system/test_e2e.py
-
-class TestE2E:
-    def test_full_capture_flow(self, app_client, mock_kindle):
-        """完全なキャプチャフローをテスト"""
-        # 1. 状態確認
-        response = app_client.get('/api/status')
-        assert response.json['kindle_found'] == True
-        
-        # 2. キャプチャ開始
-        response = app_client.post('/api/capture/start', json={
-            'mode': 'fixed',
-            'pages': 3,
-            'output_filename': 'test.pdf'
-        })
-        assert response.json['status'] == 'started'
-        
-        # 3. 完了待機
-        # WebSocketで完了イベントを待機
-        
-        # 4. PDF確認
-        assert Path('test.pdf').exists()
+def test_gui_capture_flow(qtbot, app):
+    # 1. 起動確認
+    qtbot.addWidget(app)
+    
+    # 2. 設定
+    app.pages_entry.insert(0, "5")
+    
+    # 3. 開始
+    qtbot.mouseClick(app.start_btn, Qt.LeftButton)
+    
+    # 4. 状態変化待ち
+    qtbot.wait_until(lambda: app._is_capturing)
 ```
 
 ---
@@ -112,14 +103,8 @@ pip install -r requirements-dev.txt
 # 2. ユニットテスト
 pytest tests/test_unit.py -v
 
-# 3. BDDテスト
-pytest tests/step_defs/ -v
-
-# 4. システムテスト（E2E）
-pytest tests/system/ -v
-
-# 5. 全テスト + カバレッジ
-pytest tests/ -v --cov=kindle_capture --cov=web
+# 3. GUIテスト (要デスクトップ環境)
+pytest tests/test_gui.py -v
 ```
 
 ---
@@ -129,5 +114,4 @@ pytest tests/ -v --cov=kindle_capture --cov=web
 | 項目 | 基準 |
 |------|------|
 | テストパス率 | 100% |
-| コードカバレッジ | 80%以上 |
 | 重大バグ | 0件 |
