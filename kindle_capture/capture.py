@@ -285,7 +285,8 @@ class KindleCaptureService:
         num_pages: Optional[int] = None,
         output_filename: Optional[str] = None,
         progress_callback: Optional[Callable] = None,
-        measure_performance: bool = True
+        measure_performance: bool = True,
+        bookmarks: Optional[List['Chapter']] = None
     ) -> Optional[str]:
         """
         キャプチャからPDF生成までを実行
@@ -295,6 +296,7 @@ class KindleCaptureService:
             output_filename: 出力ファイル名
             progress_callback: 進捗コールバック
             measure_performance: パフォーマンス計測を行うかどうか
+            bookmarks: しおり（章）情報
             
         Returns:
             出力PDFのパス（失敗時はNone）
@@ -323,7 +325,8 @@ class KindleCaptureService:
                 pdf_path = self._pdf.generate(
                     captured, 
                     filename, 
-                    direction=self._config.pdf_direction
+                    direction=self._config.pdf_direction,
+                    bookmarks=bookmarks
                 )
             
             if measure_performance:
@@ -343,6 +346,44 @@ class KindleCaptureService:
         finally:
             if not self._config.keep_temp_files:
                 self._capture.cleanup()
+
+    def detect_toc_page(self, offset: int = 0) -> List['Chapter']:
+        """
+        現在のページを目次として解析
+        
+        Args:
+            offset: ページ番号の補正値
+            
+        Returns:
+            解析された章情報のリスト
+        """
+        self._window.ensure_found()
+        self._window.activate()
+        
+        # 一時ファイルにキャプチャ
+        import tempfile
+        import os
+        from kindle_capture.toc_parser import TOCParser, Chapter
+        
+        temp_path = os.path.join(tempfile.gettempdir(), "toc_temp.png")
+        if not self._capture.capture_window(temp_path):
+            logger.error("目次ページのキャプチャに失敗しました")
+            return []
+            
+        parser = TOCParser()
+        chapters = parser.extract_from_image(temp_path, offset)
+        
+        # 一時ファイル削除
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass
+            
+        return chapters
+    
+    def turn_next_page(self):
+        """次のページへ遷移"""
+        self._capture.next_page()
     
     def print_performance_report(self):
         """パフォーマンスレポートを出力"""

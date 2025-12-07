@@ -36,3 +36,11 @@ class PDFGenerationError(KindleCaptureError):
     
     def __init__(self, message: str = "PDFの生成に失敗しました"):
         super().__init__(message)
+
+
+class TesseractNotFoundError(KindleCaptureError):
+    """Tesseract OCRが見つからない場合の例外"""
+    
+    def __init__(self, message: str = "Tesseract OCRが見つかりません"):
+        super().__init__(message)
+

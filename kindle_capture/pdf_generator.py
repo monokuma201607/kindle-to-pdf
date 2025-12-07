@@ -29,7 +29,7 @@ class PDFGenerator:
         self._output_dir = Path(output_dir)
         self._output_dir.mkdir(parents=True, exist_ok=True)
     
-    def generate(self, image_files: List[str], filename: str = "output.pdf", direction: str = "L2R") -> str:
+    def generate(self, image_files: List[str], filename: str = "output.pdf", direction: str = "L2R", bookmarks: List = None) -> str:
         """
         画像ファイルからPDFを生成
         
@@ -74,6 +74,17 @@ class PDFGenerator:
             else:
                 # Fallback for older versions (though not expected with current env)
                 writer.viewer_preferences = {"/Direction": dir_value}
+
+            # Add bookmarks (outline)
+            if bookmarks:
+                logger.info(f"しおりを追加します: {len(bookmarks)}件")
+                for chapter in bookmarks:
+                    # pypdf uses 0-indexed page numbers
+                    page_idx = chapter.page - 1
+                    if 0 <= page_idx < len(writer.pages):
+                        writer.add_outline_item(chapter.title, page_idx)
+                    else:
+                        logger.warning(f"しおりのページ番号が範囲外です: {chapter.title} -> p.{chapter.page}")
             
             # Write final output
             with open(output_path, "wb") as f:
