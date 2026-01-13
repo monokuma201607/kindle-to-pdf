@@ -46,7 +46,7 @@ class WindowManager:
         キーワードに一致するウィンドウを検索
         
         Args:
-            exclude_keywords: 除外するキーワードリスト（デフォルトで自身やエディタを除外）
+            exclude_keywords: 除外するキーワードリスト(デフォルトで自身やエディタを除外)
         
         Returns:
             ウィンドウが見つかった場合True
@@ -55,32 +55,35 @@ class WindowManager:
         
         # デフォルトで除外するパターン
         default_excludes = [
-            "Capture",      # 自分自身
+            "Capture",              # 自分自身
             "capture", 
-            "Visual Studio",  # VS Code
-            "Code",           # VS Code
-            ".py",            # ファイル名
-            ".md",            # ファイル名
-            "\\kindle\\",     # パス
-            "/kindle/",       # パス
+            "Visual Studio Code",   # VS Code
+            "- Visual Studio",      # Visual Studio IDE
+            ".py -",                # ファイル名 (エディタのタイトルパターン)
+            ".md -",                # ファイル名 (エディタのタイトルパターン)
+            "\\kindle\\",           # パス
+            "/kindle/",             # パス
         ]
         exclude = exclude_keywords or default_excludes
         
         def enum_callback(hwnd: int, results: List[int]) -> bool:
-            if win32gui.IsWindowVisible(hwnd):
-                title = win32gui.GetWindowText(hwnd)
-                
-                # 除外キーワードをチェック
-                for ex_keyword in exclude:
-                    if ex_keyword in title:
-                        return True  # スキップ
-                
-                # 検索キーワードをチェック
-                for keyword in self._keywords:
-                    if keyword in title:
-                        results.append(hwnd)
-                        logger.debug(f"ウィンドウ発見: '{title}' (hwnd={hwnd})")
-                        return True
+            title = win32gui.GetWindowText(hwnd)
+            
+            # 空のタイトルは無視
+            if not title:
+                return True
+            
+            # 除外キーワードをチェック
+            for ex_keyword in exclude:
+                if ex_keyword in title:
+                    return True  # スキップ
+            
+            # 検索キーワードをチェック
+            for keyword in self._keywords:
+                if keyword in title:
+                    results.append(hwnd)
+                    logger.debug(f"ウィンドウ発見: '{title}' (hwnd={hwnd})")
+                    return True
             return True
         
         windows: List[int] = []
